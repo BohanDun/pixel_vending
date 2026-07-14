@@ -39,3 +39,44 @@ def ensure_machine_product_columns():
             connection.execute(
                 text("ALTER TABLE machine_products ADD COLUMN quantity INTEGER NOT NULL DEFAULT 0")
             )
+
+        # Older versions could insert the same product into a machine more than once.
+        # Preserve the inventory by summing those rows before enforcing uniqueness.
+        connection.execute(
+            text(
+                """
+                UPDATE machine_products AS machine_product
+                SET quantity = (
+                    SELECT SUM(duplicate.quantity)
+                    FROM machine_products AS duplicate
+                    WHERE duplicate.machine_id = machine_product.machine_id
+                      AND duplicate.product_id = machine_product.product_id
+                )
+                WHERE rowid IN (
+                    SELECT MIN(rowid)
+                    FROM machine_products
+                    GROUP BY machine_id, product_id
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                DELETE FROM machine_products
+                WHERE rowid NOT IN (
+                    SELECT MIN(rowid)
+                    FROM machine_products
+                    GROUP BY machine_id, product_id
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_machine_product
+                ON machine_products (machine_id, product_id)
+                """
+            )
+        )

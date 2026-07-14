@@ -1,26 +1,15 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, status, HTTPException
 from sqlalchemy.orm import joinedload
 
 from api.models import Product, Machine, machine_product_association
 from api.deps import db_dependency, user_dependency
+from api.schemas.machine import MachineCreate, MachineProductQuantity
 
 router = APIRouter(
     prefix="/machines",
     tags=["machines"],
 )
-
-class MachineBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-class MachineCreate(MachineBase):
-    products: List[int] = Field(default_factory=list)
-    product_names: List[str] = Field(default_factory=list)
-
-class MachineProductQuantity(BaseModel):
-    quantity: int = Field(default=0, ge=0)
 
 def get_machine_product_quantity(db, machine_id: int, product_id: int):
     row = (
@@ -98,7 +87,11 @@ def create_machine(db: db_dependency, user: user_dependency, payload: MachineCre
         db_machine.products.extend(products)
 
     if payload.product_names:
-        names = [n.strip() for n in payload.product_names if n and n.strip()]
+        names = list(
+            dict.fromkeys(
+                n.strip() for n in payload.product_names if n and n.strip()
+            )
+        )
         if names:
             existing = (
                 db.query(Product)
@@ -112,7 +105,9 @@ def create_machine(db: db_dependency, user: user_dependency, payload: MachineCre
                     product = Product(name=nm, user_id=user.get("id"))
                     db.add(product)
                     db.flush()
-                db_machine.products.append(product)
+                    by_name[nm] = product
+                if product not in db_machine.products:
+                    db_machine.products.append(product)
 
     db.add(db_machine)
     db.commit()

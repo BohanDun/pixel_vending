@@ -1,27 +1,9 @@
-from decimal import Decimal
-
-from pydantic import BaseModel, Field, condecimal
-from typing import Optional
 from fastapi import APIRouter, status, HTTPException
 from api.models import Product, Machine, machine_product_association
 from api.deps import db_dependency, user_dependency
+from api.schemas.product import ProductCreate, ProductPriceUpdate, ProductQuantityChange
 
 router = APIRouter(prefix="/products", tags=["products"])
-
-class ProductBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    quantity: int = Field(ge=0)
-    price: condecimal(max_digits=10, decimal_places=2, ge=Decimal("0.00"))
-
-class ProductCreate(ProductBase):
-    pass
-
-class ProductPriceUpdate(BaseModel):
-    price: condecimal(max_digits=10, decimal_places=2, ge=Decimal("0.00"))
-
-class ProductQuantityChange(BaseModel):
-    quantity: int = Field(gt=0)
 
 @router.get("/{product_id}")
 def get_product(db: db_dependency, user: user_dependency, product_id: int):
