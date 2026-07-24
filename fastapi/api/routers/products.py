@@ -1,5 +1,5 @@
 from fastapi import APIRouter, status, HTTPException
-from api.models import Product, Machine, machine_product_association
+from api.models import Machine, MachineProduct, Product
 from api.deps import db_dependency, user_dependency
 from api.schemas.product import ProductCreate, ProductPriceUpdate, ProductQuantityChange
 
@@ -22,14 +22,14 @@ def get_products(db: db_dependency, user: user_dependency):
     if product_ids:
         rows = (
             db.query(
-                machine_product_association.c.product_id,
+                MachineProduct.product_id,
                 Machine.id.label("machine_id"),
                 Machine.name.label("machine_name"),
-                machine_product_association.c.quantity,
+                MachineProduct.quantity,
             )
-            .join(Machine, Machine.id == machine_product_association.c.machine_id)
+            .join(Machine, Machine.id == MachineProduct.machine_id)
             .filter(
-                machine_product_association.c.product_id.in_(product_ids),
+                MachineProduct.product_id.in_(product_ids),
                 Machine.user_id == user.get("id"),
             )
             .all()
@@ -119,5 +119,8 @@ def delete_product(db: db_dependency, user: user_dependency, product_id: int):
     )
     if db_product is None:
         raise HTTPException(status_code=404, detail="Not found")
+    db.query(MachineProduct).filter(
+        MachineProduct.product_id == db_product.id
+    ).delete(synchronize_session=False)
     db.delete(db_product)
     db.commit()

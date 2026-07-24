@@ -2,7 +2,8 @@ from typing import Optional
 from fastapi import APIRouter, status, HTTPException
 from sqlalchemy.orm import joinedload
 
-from api.models import Product, Machine, machine_product_association
+from api.models import Machine, MachineProduct, Product
+from api.models.machine import DEFAULT_MACHINE_PRODUCT_CAPACITY
 from api.deps import db_dependency, user_dependency
 from api.schemas.machine import MachineCreate, MachineProductQuantity
 
@@ -11,16 +12,15 @@ router = APIRouter(
     tags=["machines"],
 )
 
-def get_machine_product_quantity(db, machine_id: int, product_id: int):
-    row = (
-        db.query(machine_product_association.c.quantity)
+def get_machine_product(db, machine_id: int, product_id: int):
+    return (
+        db.query(MachineProduct)
         .filter(
-            machine_product_association.c.machine_id == machine_id,
-            machine_product_association.c.product_id == product_id,
+            MachineProduct.machine_id == machine_id,
+            MachineProduct.product_id == product_id,
         )
         .first()
     )
-    return row.quantity if row else 0
 
 def ensure_enough_warehouse_quantity(product: Product, quantity: int):
     if quantity > product.quantity:
@@ -29,17 +29,24 @@ def ensure_enough_warehouse_quantity(product: Product, quantity: int):
             detail="Not enough warehouse quantity",
         )
 
-def serialize_machine(db, machine: Machine):
-    product_quantities = {
-        row.product_id: row.quantity
-        for row in db.query(
-            machine_product_association.c.product_id,
-            machine_product_association.c.quantity,
+def ensure_enough_machine_capacity(
+    machine_product: MachineProduct,
+    quantity_to_add: int,
+):
+    capacity = (
+        machine_product.capacity
+        if machine_product.capacity is not None
+        else DEFAULT_MACHINE_PRODUCT_CAPACITY
+    )
+    current_quantity = machine_product.quantity or 0
+    remaining_capacity = capacity - current_quantity
+    if quantity_to_add > remaining_capacity:
+        raise HTTPException(
+            status_code=400,
+            detail="Quantity exceeds machine product capacity",
         )
-        .filter(machine_product_association.c.machine_id == machine.id)
-        .all()
-    }
 
+def serialize_machine(machine: Machine):
     return {
         "id": machine.id,
         "user_id": machine.user_id,
@@ -47,15 +54,15 @@ def serialize_machine(db, machine: Machine):
         "description": machine.description,
         "products": [
             {
-                "id": product.id,
-                "user_id": product.user_id,
-                "name": product.name,
-                "description": product.description,
-                "quantity": product.quantity,
-                "price": product.price,
-                "machine_quantity": product_quantities.get(product.id, 0),
+                "id": machine_product.product.id,
+                "user_id": machine_product.product.user_id,
+                "name": machine_product.product.name,
+                "description": machine_product.product.description,
+                "quantity": machine_product.product.quantity,
+                "price": machine_product.product.price,
+                "machine_quantity": machine_product.quantity,
             }
-            for product in machine.products
+            for machine_product in machine.machine_products
         ],
     }
 
@@ -63,11 +70,13 @@ def serialize_machine(db, machine: Machine):
 def get_machines(db: db_dependency, user: user_dependency):
     machines = (
         db.query(Machine)
-        .options(joinedload(Machine.products))
+        .options(
+            joinedload(Machine.machine_products).joinedload(MachineProduct.product)
+        )
         .filter(Machine.user_id == user.get("id"))
         .all()
     )
-    return [serialize_machine(db, machine) for machine in machines]
+    return [serialize_machine(machine) for machine in machines]
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_machine(db: db_dependency, user: user_dependency, payload: MachineCreate):
@@ -77,6 +86,7 @@ def create_machine(db: db_dependency, user: user_dependency, payload: MachineCre
         user_id=user.get("id"),
     )
 
+    selected_products = {}
     ids = list(dict.fromkeys(payload.products or []))
     if ids:
         products = (
@@ -84,7 +94,7 @@ def create_machine(db: db_dependency, user: user_dependency, payload: MachineCre
             .filter(Product.id.in_(ids), Product.user_id == user.get("id"))
             .all()
         )
-        db_machine.products.extend(products)
+        selected_products.update({product.id: product for product in products})
 
     if payload.product_names:
         names = list(
@@ -106,8 +116,11 @@ def create_machine(db: db_dependency, user: user_dependency, payload: MachineCre
                     db.add(product)
                     db.flush()
                     by_name[nm] = product
-                if product not in db_machine.products:
-                    db_machine.products.append(product)
+                selected_products[product.id] = product
+
+    db_machine.machine_products = [
+        MachineProduct(product=product) for product in selected_products.values()
+    ]
 
     db.add(db_machine)
     db.commit()
@@ -115,11 +128,13 @@ def create_machine(db: db_dependency, user: user_dependency, payload: MachineCre
 
     db_machine = (
         db.query(Machine)
-        .options(joinedload(Machine.products))
+        .options(
+            joinedload(Machine.machine_products).joinedload(MachineProduct.product)
+        )
         .filter(Machine.id == db_machine.id)
         .first()
     )
-    return serialize_machine(db, db_machine)
+    return serialize_machine(db_machine)
 
 @router.post("/{machine_id}/products/{product_id}")
 def add_product_to_machine(
@@ -153,25 +168,24 @@ def add_product_to_machine(
 
     ensure_enough_warehouse_quantity(db_product, quantity)
 
-    if db_product not in db_machine.products:
-        db_machine.products.append(db_product)
-        db.flush()
-
-    current_quantity = get_machine_product_quantity(db, machine_id, product_id)
-    db_product.quantity -= quantity
-
-    db.execute(
-        machine_product_association.update()
-        .where(
-            machine_product_association.c.machine_id == machine_id,
-            machine_product_association.c.product_id == product_id,
+    machine_product = get_machine_product(db, machine_id, product_id)
+    if machine_product is None:
+        machine_product = MachineProduct(
+            machine_id=db_machine.id,
+            product_id=db_product.id,
+            quantity=0,
+            capacity=DEFAULT_MACHINE_PRODUCT_CAPACITY,
         )
-        .values(quantity=current_quantity + quantity)
-    )
+
+    ensure_enough_machine_capacity(machine_product, quantity)
+
+    db.add(machine_product)
+    db_product.quantity -= quantity
+    machine_product.quantity += quantity
     db.commit()
     db.refresh(db_machine)
 
-    return serialize_machine(db, db_machine)
+    return serialize_machine(db_machine)
 
 @router.put("/{machine_id}/products/{product_id}/quantity")
 def update_machine_product_quantity(
@@ -183,7 +197,9 @@ def update_machine_product_quantity(
 ):
     db_machine = (
         db.query(Machine)
-        .options(joinedload(Machine.products))
+        .options(
+            joinedload(Machine.machine_products).joinedload(MachineProduct.product)
+        )
         .filter(Machine.id == machine_id, Machine.user_id == user.get("id"))
         .first()
     )
@@ -197,28 +213,24 @@ def update_machine_product_quantity(
         .first()
     )
 
-    if db_product is None or db_product not in db_machine.products:
+    machine_product = get_machine_product(db, machine_id, product_id)
+    if db_product is None or machine_product is None:
         raise HTTPException(status_code=404, detail="Product not found in machine")
 
-    current_quantity = get_machine_product_quantity(db, machine_id, product_id)
-    quantity_delta = payload.quantity - current_quantity
+    quantity_delta = payload.quantity - machine_product.quantity
 
     if quantity_delta > 0:
         ensure_enough_warehouse_quantity(db_product, quantity_delta)
+        ensure_enough_machine_capacity(machine_product, quantity_delta)
         db_product.quantity -= quantity_delta
+    elif quantity_delta < 0:
+        db_product.quantity += abs(quantity_delta)
 
-    db.execute(
-        machine_product_association.update()
-        .where(
-            machine_product_association.c.machine_id == machine_id,
-            machine_product_association.c.product_id == product_id,
-        )
-        .values(quantity=payload.quantity)
-    )
+    machine_product.quantity = payload.quantity
     db.commit()
     db.refresh(db_machine)
 
-    return serialize_machine(db, db_machine)
+    return serialize_machine(db_machine)
 
 @router.post("/{machine_id}/products/{product_id}/delete-quantity")
 def delete_machine_product_quantity(
@@ -230,7 +242,9 @@ def delete_machine_product_quantity(
 ):
     db_machine = (
         db.query(Machine)
-        .options(joinedload(Machine.products))
+        .options(
+            joinedload(Machine.machine_products).joinedload(MachineProduct.product)
+        )
         .filter(Machine.id == machine_id, Machine.user_id == user.get("id"))
         .first()
     )
@@ -244,27 +258,31 @@ def delete_machine_product_quantity(
         .first()
     )
 
-    if db_product is None or db_product not in db_machine.products:
+    machine_product = get_machine_product(db, machine_id, product_id)
+    if db_product is None or machine_product is None:
         raise HTTPException(status_code=404, detail="Product not found in machine")
 
-    current_quantity = get_machine_product_quantity(db, machine_id, product_id)
-
-    if payload.quantity >= current_quantity:
-        db_machine.products.remove(db_product)
-    else:
-        db.execute(
-            machine_product_association.update()
-            .where(
-                machine_product_association.c.machine_id == machine_id,
-                machine_product_association.c.product_id == product_id,
-            )
-            .values(quantity=current_quantity - payload.quantity)
+    if payload.quantity <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Quantity must be greater than zero",
         )
+
+    if payload.quantity > machine_product.quantity:
+        raise HTTPException(
+            status_code=400,
+            detail="Not enough machine stock",
+        )
+
+    if payload.quantity == machine_product.quantity:
+        db.delete(machine_product)
+    else:
+        machine_product.quantity -= payload.quantity
 
     db.commit()
     db.refresh(db_machine)
 
-    return serialize_machine(db, db_machine)
+    return serialize_machine(db_machine)
 
 @router.post("/{machine_id}/products/{product_id}/put-back")
 def put_machine_product_quantity_back(
@@ -276,7 +294,9 @@ def put_machine_product_quantity_back(
 ):
     db_machine = (
         db.query(Machine)
-        .options(joinedload(Machine.products))
+        .options(
+            joinedload(Machine.machine_products).joinedload(MachineProduct.product)
+        )
         .filter(Machine.id == machine_id, Machine.user_id == user.get("id"))
         .first()
     )
@@ -290,33 +310,26 @@ def put_machine_product_quantity_back(
         .first()
     )
 
-    if db_product is None or db_product not in db_machine.products:
+    machine_product = get_machine_product(db, machine_id, product_id)
+    if db_product is None or machine_product is None:
         raise HTTPException(status_code=404, detail="Product not found in machine")
 
-    current_quantity = get_machine_product_quantity(db, machine_id, product_id)
-    quantity_to_return = min(payload.quantity, current_quantity)
+    quantity_to_return = min(payload.quantity, machine_product.quantity)
 
     if quantity_to_return <= 0:
         raise HTTPException(status_code=400, detail="Quantity must be greater than zero")
 
     db_product.quantity += quantity_to_return
 
-    if quantity_to_return >= current_quantity:
-        db_machine.products.remove(db_product)
+    if quantity_to_return >= machine_product.quantity:
+        db.delete(machine_product)
     else:
-        db.execute(
-            machine_product_association.update()
-            .where(
-                machine_product_association.c.machine_id == machine_id,
-                machine_product_association.c.product_id == product_id,
-            )
-            .values(quantity=current_quantity - quantity_to_return)
-        )
+        machine_product.quantity -= quantity_to_return
 
     db.commit()
     db.refresh(db_machine)
 
-    return serialize_machine(db, db_machine)
+    return serialize_machine(db_machine)
 
 @router.delete("/{machine_id}/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_product_from_machine(db: db_dependency, user: user_dependency, machine_id: int, product_id: int,):
@@ -338,9 +351,10 @@ def remove_product_from_machine(db: db_dependency, user: user_dependency, machin
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    if db_product in db_machine.products:
-        db_product.quantity += get_machine_product_quantity(db, machine_id, product_id)
-        db_machine.products.remove(db_product)
+    machine_product = get_machine_product(db, machine_id, product_id)
+    if machine_product is not None:
+        db_product.quantity += machine_product.quantity
+        db.delete(machine_product)
         db.commit()
 
 
@@ -348,38 +362,19 @@ def remove_product_from_machine(db: db_dependency, user: user_dependency, machin
 def delete_machine(db: db_dependency, user: user_dependency, machine_id: int):
     db_machine = (
         db.query(Machine)
+        .options(
+            joinedload(Machine.machine_products).joinedload(MachineProduct.product)
+        )
         .filter(Machine.id == machine_id, Machine.user_id == user.get("id"))
         .first()
     )
     if db_machine is None:
         raise HTTPException(status_code=404, detail="Machine not found")
 
-    product_quantities = (
-        db.query(
-            machine_product_association.c.product_id,
-            machine_product_association.c.quantity,
-        )
-        .filter(machine_product_association.c.machine_id == machine_id)
-        .all()
-    )
+    for machine_product in db_machine.machine_products:
+        if machine_product.product is not None:
+            machine_product.product.quantity += machine_product.quantity
 
-    for product_quantity in product_quantities:
-        db_product = (
-            db.query(Product)
-            .filter(
-                Product.id == product_quantity.product_id,
-                Product.user_id == user.get("id"),
-            )
-            .first()
-        )
-        if db_product is not None:
-            db_product.quantity += product_quantity.quantity
-
-    db.execute(
-        machine_product_association.delete().where(
-            machine_product_association.c.machine_id == machine_id
-        )
-    )
     db.delete(db_machine)
     db.commit()
     return db_machine

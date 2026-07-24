@@ -1,10 +1,10 @@
-from .machine import Machine, machine_product_association
+from .machine import Machine, MachineProduct
 from .product import Product
 from .user import User
 
 __all__ = [
     "Machine",
+    "MachineProduct",
     "Product",
     "User",
-    "machine_product_association",
 ]
