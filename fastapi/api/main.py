@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, products, machines
+from .routers import auth, machines, products, transactions
 
 app = FastAPI()
 
@@ -19,3 +19,4 @@ def health_check():
 app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(machines.router)
+app.include_router(transactions.router)

@@ -6,6 +6,7 @@ from .product import (
     ProductPriceUpdate,
     ProductQuantityChange,
 )
+from .transaction import PurchaseRequest, TransactionResponse
 
 __all__ = [
     "MachineBase",
@@ -15,6 +16,8 @@ __all__ = [
     "ProductCreate",
     "ProductPriceUpdate",
     "ProductQuantityChange",
+    "PurchaseRequest",
     "Token",
+    "TransactionResponse",
     "UserCreateRequest",
 ]
