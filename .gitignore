@@ -10,7 +10,12 @@ __pycache__/
 .env
 
 # Node / Next.js
-nextjs/node_modules/
-nextjs/.next/
-nextjs/.vercel/
-nextjs/.env*
+frontend/node_modules/
+frontend/.next/
+frontend/.vercel/
+frontend/.env*
+frontend/tmp/
+
+# Operating system / local tooling
+.DS_Store
+*.log

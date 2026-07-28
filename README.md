@@ -1,157 +1,191 @@
-Vending Machine Management
+# Pixel Vending Simulator
 
-A small full-stack vending machine management app built with FastAPI, SQLite, JWT authentication, and Next.js.
+A full-stack pixel-art vending machine simulator built with FastAPI, SQLite,
+SQLAlchemy, Alembic, Next.js, and React.
 
-Users can register, log in, create products, manage warehouse inventory, assign products to vending machines, restock products, sell items from machines, and put machine stock back into the warehouse.
+Users manage products, warehouse inventory, prices, and vending machines while
+virtual customers automatically visit the store and make randomized purchases.
+The application records transactions, restocks machines after stockouts, and
+creates daily sales summaries in the Pacific/Auckland timezone.
 
-Features
+## Features
 
-- Username/password registration and JWT login
-- Protected frontend pages
-- Product management with name, description, price, and warehouse quantity
-- Machine management with products assigned to each machine
-- Warehouse inventory tracking
-- Restock products into the warehouse
-- Add product quantity from warehouse to a machine
-- Sell product quantity from a machine
-- Put product quantity back from a machine to the warehouse
-- Delete machines while returning all machine stock to the warehouse
-- Swagger/OpenAPI docs at `/docs`
+### Store management
 
-Tech Stack
+- Register and sign in with JWT authentication.
+- Create products with a name, description, starting quantity, and price.
+- Change product prices and manually restock the warehouse.
+- Create up to four vending machines.
+- Assign products to machines and move stock between machines and the warehouse.
+- Pause automatic simulation when inventory is changed manually.
 
-- Backend: Python, FastAPI, SQLAlchemy, Pydantic, Uvicorn, python-jose, passlib, SQLite
-- Frontend: Next.js, React, Axios, Bootstrap
+### Customer simulation
 
-Project Structure
+- Generate virtual customers with randomized names, budgets, and pixel-art
+  appearances.
+- Purchase random quantities of one or more products.
+- Purchase from multiple vending machines in a single visit.
+- Record successful purchases and failures such as insufficient budget and
+  out-of-stock products.
+- Display customer movement and purchase results in the Pixel Mart scene.
+
+### Inventory automation
+
+- Each machine product slot has a capacity of 50 units.
+- Automatic restocking is triggered after an out-of-stock purchase.
+- If warehouse stock is insufficient, supplier delivery increases warehouse
+  stock before the machine is refilled.
+- Inventory changes and purchases are handled through database transactions.
+
+### Sales history
+
+- Keep detailed transaction records for the most recent seven days.
+- Keep daily sales summaries for the most recent 30 days.
+- Settle the previous day automatically at midnight in Pacific/Auckland time.
+- Catch up on missed settlement tasks when the backend starts.
+- Display revenue, successful and failed transactions, units sold, and the
+  top-selling product.
+
+## Technology
+
+| Area | Technology |
+| --- | --- |
+| Backend | Python 3.12, FastAPI, SQLAlchemy, Pydantic |
+| Database | SQLite, Alembic |
+| Authentication | JWT, python-jose, Passlib, bcrypt |
+| Scheduler | APScheduler |
+| Frontend | Next.js 15, React 19, Axios, Bootstrap |
+| Testing | Python unittest |
+
+## Project structure
 
 ```text
-vending_machine/
-├─ fastapi/
-│  ├─ api/
-│  │  ├─ main.py
-│  │  ├─ database.py
-│  │  ├─ models.py
-│  │  ├─ deps.py
-│  │  └─ routers/
-│  │     ├─ auth.py
-│  │     ├─ products.py
-│  │     └─ machines.py
-│  └─ requirements.txt
-└─ nextjs/
-   ├─ src/app/
-   │  ├─ components/ProtectedRoute.js
-   │  ├─ context/AuthContext.js
-   │  ├─ login/page.js
-   │  └─ page.js
-   ├─ package.json
-   └─ next.config.mjs
+pixel_vending/
+├── backend/
+│   ├── api/
+│   │   ├── models/
+│   │   ├── routers/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── database.py
+│   │   ├── deps.py
+│   │   └── main.py
+│   ├── migrations/
+│   ├── tests/
+│   ├── alembic.ini
+│   └── requirements.txt
+├── frontend/
+│   ├── public/assets/
+│   ├── src/app/
+│   ├── package.json
+│   └── package-lock.json
+├── .gitignore
+└── README.md
 ```
 
-Quick Start
+## Local setup
 
-Run the backend and frontend in two separate terminals.
+### Requirements
 
-Backend
+- Python 3.12
+- Node.js and npm
+
+### 1. Create the Python environment
+
+Run this once from the project root:
 
 ```bash
-cd fastapi
-source ../vending_machine_venv/bin/activate
-uvicorn api.main:app --reload
+cd /Users/peterdun/VS_Code_Playground/pixel_vending
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r backend/requirements.txt
 ```
 
-Open API docs:
+### 2. Configure backend environment variables
 
-```text
-http://localhost:8000/docs
-```
-
-Frontend
-
-```bash
-cd nextjs
-npm install
-npm run dev
-```
-
-Open the app:
-
-```text
-http://localhost:3000
-```
-
-Environment Variables
-
-Create `fastapi/.env`:
+Create `backend/.env`:
 
 ```env
-AUTH_SECRET_KEY=change_me_to_a_random_long_string
+AUTH_SECRET_KEY=replace_with_a_long_random_secret
 AUTH_ALGORITHM=HS256
 ```
 
-The frontend currently calls the backend at `http://localhost:8000`.
+The `.env` file and local SQLite database are ignored by Git.
 
-Inventory Logic
+### 3. Apply database migrations
 
-- `Warehouse` means product quantity stored outside machines.
-- `In machines` means the total quantity currently loaded into vending machines.
-- `Total quantity` means warehouse quantity plus machine quantity.
-- `Restock` adds quantity to the warehouse.
-- `Add Quantity` moves quantity from the warehouse into a machine.
-- `Sell` removes quantity from a machine and decreases total inventory.
-- `Put Back` moves quantity from a machine back into the warehouse.
-- `Put Back All` returns all quantity for that product from a machine to the warehouse.
-- Deleting a machine returns all products in that machine to the warehouse before deleting it.
+```bash
+cd /Users/peterdun/VS_Code_Playground/pixel_vending/backend
+source ../.venv/bin/activate
+python -m alembic upgrade head
+```
 
-API Overview
+### 4. Install frontend dependencies
 
-Auth
+```bash
+cd /Users/peterdun/VS_Code_Playground/pixel_vending/frontend
+npm install
+```
 
-- `POST /auth/` - create user
-- `POST /auth/token` - login and return JWT
+## Running the application
 
-Products
+Use two terminals.
 
-- `GET /products/` - list products with warehouse and machine quantities
-- `POST /products/` - create product
-- `POST /products/{product_id}/restock` - add quantity to warehouse
-- `PUT /products/{product_id}/price` - update product price
-- `DELETE /products/{product_id}` - delete product
+### Terminal 1: backend
 
-Machines
-
-- `GET /machines/` - list machines with assigned products
-- `POST /machines/` - create machine
-- `POST /machines/{machine_id}/products/{product_id}` - add product quantity to machine
-- `POST /machines/{machine_id}/products/{product_id}/delete-quantity` - sell quantity from machine
-- `POST /machines/{machine_id}/products/{product_id}/put-back` - return quantity to warehouse
-- `DELETE /machines/{machine_id}/products/{product_id}` - return all quantity to warehouse and remove product from machine
-- `DELETE /machines/{machine_id}` - delete machine and return all machine stock to warehouse
-
-Useful Commands
+```bash
+cd /Users/peterdun/VS_Code_Playground/pixel_vending/backend
+source ../.venv/bin/activate
+python -m uvicorn api.main:app --reload --port 8000
+```
 
 Backend:
 
-```bash
-uvicorn api.main:app --reload
-```
+- API: <http://localhost:8000>
+- Swagger documentation: <http://localhost:8000/docs>
 
-Frontend:
+### Terminal 2: frontend
 
 ```bash
+cd /Users/peterdun/VS_Code_Playground/pixel_vending/frontend
 npm run dev
-npm run build
-npm start
 ```
 
-Troubleshooting
+Frontend: <http://localhost:3000>
 
-- `Address already in use`: another backend server is already running on port 8000.
-- `401 Unauthorized`: log in again so the frontend has a valid JWT token.
-- `422 Unprocessable Entity`: check the request body shape and required fields.
-- Login stays on the login page: make sure the FastAPI backend is running.
-- Reset local data: stop the backend and delete the local SQLite database file. The app will recreate tables on startup.
+If Next.js selects port 3001, another process is still using port 3000.
 
-License
+## Tests and checks
 
-This project is for learning and demo purposes.
+### Backend tests
+
+```bash
+cd /Users/peterdun/VS_Code_Playground/pixel_vending/backend
+source ../.venv/bin/activate
+python -m unittest discover -s tests -v
+```
+
+### Database migration check
+
+```bash
+python -m alembic check
+```
+
+### Frontend production build
+
+Stop the frontend development server before running the build:
+
+```bash
+cd /Users/peterdun/VS_Code_Playground/pixel_vending/frontend
+npm run build
+```
+
+## Local-development notes
+
+- The frontend currently expects the API at `http://localhost:8000`.
+- The backend currently permits CORS requests from `http://localhost:3000`.
+- Authentication tokens are stored in browser session storage.
+- The application uses `Pacific/Auckland` for daily settlement.
+- This repository is intended as a learning and portfolio project.
