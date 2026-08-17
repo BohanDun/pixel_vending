@@ -41,7 +41,7 @@ check_port() {
   fail "backend/.env not found. Run: cp backend/.env.example backend/.env"
 
 [[ -x "$project_dir/frontend/node_modules/.bin/next" ]] || \
-  fail "Frontend dependencies not found. Run: cd frontend && npm install"
+  fail "Frontend dependencies not found. Run: cd frontend && npm ci"
 
 check_port 8000
 check_port 3000

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "lint": "eslint src",
     "start": "next start"
   },
   "dependencies": {
@@ -13,5 +14,9 @@
     "next": "^15.5.22",
     "react": "19.1.0",
     "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.22"
   }
 }

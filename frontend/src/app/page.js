@@ -1,17 +1,30 @@
 "use client";
 
-import { useContext, useState, useEffect, useRef } from 'react';
+import { useCallback, useContext, useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import AuthContext from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import SimulationScene from './components/simulation/SimulationScene';
-import axios from 'axios';
+import api from '../lib/api';
 
 const delay = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 const TRANSACTIONS_PER_PAGE = 10;
 const MAX_MACHINES = 4;
-const MACHINE_LIMIT_MESSAGE = 'sorry, no availabe space';
+const MACHINE_LIMIT_MESSAGE = 'You can create up to four vending machines.';
+const getErrorMessage = (error, fallback) => error?.response?.data?.detail || fallback;
+
+const getAuth = () => {
+  const raw = sessionStorage.getItem('token');
+  if (!raw) return {};
+  let token = raw;
+  try {
+    const parsed = JSON.parse(raw);
+    token = parsed.access_token ?? parsed.token ?? raw;
+  } catch {}
+  return { headers: { Authorization: `Bearer ${token}` } };
+};
 
 const Home = () => {
   const { user, logout } = useContext(AuthContext);
@@ -45,9 +58,7 @@ const Home = () => {
   const simulationBusy = useRef(false);
   const manualActionPending = useRef(false);
 
-  const getErrorMessage = (error, fallback) => error?.response?.data?.detail || fallback;
-
-  const handleApiError = (error, fallback, showAlert = true) => {
+  const handleApiError = useCallback((error, fallback, showAlert = true) => {
     const message = getErrorMessage(error, fallback);
     if (error?.response?.status === 401) {
       setSimulationRunning(false);
@@ -57,18 +68,7 @@ const Home = () => {
     }
     if (showAlert) window.alert(message);
     return message;
-  };
-
-  const getAuth = () => {
-    const raw = sessionStorage.getItem('token');
-    if (!raw) return {};
-    let token = raw;
-    try {
-      const parsed = JSON.parse(raw);
-      token = parsed.access_token ?? parsed.token ?? raw;
-    } catch {}
-    return { headers: { Authorization: `Bearer ${token}` } };
-  };
+  }, [logout]);
 
   useEffect(() => {
     const fetchProductsAndMachines = async () => {
@@ -87,9 +87,9 @@ const Home = () => {
           machinesResponse,
           dailySummariesResponse,
         ] = await Promise.all([
-          axios.get('http://localhost:8000/products/', auth),
-          axios.get('http://localhost:8000/machines/', auth),
-          axios.get('http://localhost:8000/daily-summaries/', auth),
+          api.get('/products/', auth),
+          api.get('/machines/', auth),
+          api.get('/daily-summaries/', auth),
         ]);
         setProducts(productsResponse.data);
         setMachines(machinesResponse.data);
@@ -100,28 +100,25 @@ const Home = () => {
     };
 
     fetchProductsAndMachines();
-  }, []);
+  }, [handleApiError]);
 
-  const refreshProductsAndMachines = async () => {
+  const refreshProductsAndMachines = useCallback(async () => {
     const auth = getAuth();
     const [productsResponse, machinesResponse] = await Promise.all([
-      axios.get('http://localhost:8000/products/', auth),
-      axios.get('http://localhost:8000/machines/', auth),
+      api.get('/products/', auth),
+      api.get('/machines/', auth),
     ]);
     setProducts(productsResponse.data);
     setMachines(machinesResponse.data);
-  };
+  }, []);
 
-  const fetchTransactions = async (
-    page = transactionPage,
-    status = transactionStatus
-  ) => {
+  const fetchTransactions = useCallback(async (page, status) => {
     if (!sessionStorage.getItem('token')) return;
 
     setTransactionsLoading(true);
     try {
-      const response = await axios.get(
-        'http://localhost:8000/transactions/',
+      const response = await api.get(
+        '/transactions/',
         {
           ...getAuth(),
           params: {
@@ -140,11 +137,11 @@ const Home = () => {
     } finally {
       setTransactionsLoading(false);
     }
-  };
+  }, [handleApiError]);
 
   useEffect(() => {
     fetchTransactions(transactionPage, transactionStatus);
-  }, [transactionPage, transactionStatus]);
+  }, [fetchTransactions, transactionPage, transactionStatus]);
 
   const formatTransactionTime = (value) => {
     if (!value) return '—';
@@ -166,14 +163,14 @@ const Home = () => {
     machines.find((machine) => machine.id === transaction.machine_id)?.name
     || (transaction.machine_id == null ? 'Deleted machine' : `Machine #${transaction.machine_id}`);
 
-  const runSimulationOnce = async () => {
+  const runSimulationOnce = useCallback(async () => {
     if (simulationBusy.current || manualActionPending.current) return;
 
     simulationBusy.current = true;
     setSimulationError('');
     try {
-      const response = await axios.post(
-        'http://localhost:8000/simulation/run-once',
+      const response = await api.post(
+        '/simulation/run-once',
         {},
         {
           ...getAuth(),
@@ -221,7 +218,13 @@ const Home = () => {
     } finally {
       simulationBusy.current = false;
     }
-  };
+  }, [
+    fetchTransactions,
+    handleApiError,
+    refreshProductsAndMachines,
+    transactionPage,
+    transactionStatus,
+  ]);
 
   const pauseSimulationForManualAction = async () => {
     manualActionPending.current = true;
@@ -245,13 +248,13 @@ const Home = () => {
       simulationSpeed
     );
     return () => window.clearInterval(intervalId);
-  }, [simulationRunning, simulationSpeed]);
+  }, [runSimulationOnce, simulationRunning, simulationSpeed]);
 
   const handleCreateProduct = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(
-        'http://localhost:8000/products/',
+      await api.post(
+        '/products/',
         {
           name: productName,
           description: productDescription,
@@ -278,8 +281,8 @@ const Home = () => {
     }
 
     try {
-      await axios.post(
-        'http://localhost:8000/machines/',
+      await api.post(
+        '/machines/',
         { name: machineName, description: machineDescription, products: selectedProducts.map(Number) },
         getAuth()
       );
@@ -294,7 +297,7 @@ const Home = () => {
 
   const deleteProduct = async (id) => {
     try {
-      await axios.delete(`http://localhost:8000/products/${id}`, getAuth());
+      await api.delete(`/products/${id}`, getAuth());
       setProducts((prev) => prev.filter((product) => product.id !== id));
       setSelectedProducts((prev) => prev.filter((productId) => productId !== id));
       setMachines((prev) =>
@@ -310,7 +313,7 @@ const Home = () => {
 
   const deleteMachine = async (id) => {
     try {
-      await axios.delete(`http://localhost:8000/machines/${id}`, getAuth());
+      await api.delete(`/machines/${id}`, getAuth());
       setMachines((currentMachines) =>
         currentMachines.filter((machine) => machine.id !== id)
       );
@@ -327,8 +330,8 @@ const Home = () => {
 
     await pauseSimulationForManualAction();
     try {
-      await axios.post(
-        `http://localhost:8000/machines/${machineId}/products/${productId}`,
+      await api.post(
+        `/machines/${machineId}/products/${productId}`,
         { quantity: Number(selectedProductQuantityByMachine[machineId] || 0) },
         getAuth()
       );
@@ -352,8 +355,8 @@ const Home = () => {
 
   const removeProductFromMachine = async (machineId, productId) => {
     try {
-      await axios.delete(
-        `http://localhost:8000/machines/${machineId}/products/${productId}`,
+      await api.delete(
+        `/machines/${machineId}/products/${productId}`,
         getAuth()
       );
 
@@ -370,8 +373,8 @@ const Home = () => {
     if (quantity <= 0) return;
 
     try {
-      await axios.post(
-        `http://localhost:8000/machines/${machineId}/products/${productId}/delete-quantity`,
+      await api.post(
+        `/machines/${machineId}/products/${productId}/delete-quantity`,
         { quantity },
         getAuth()
       );
@@ -393,8 +396,8 @@ const Home = () => {
 
     await pauseSimulationForManualAction();
     try {
-      await axios.put(
-        `http://localhost:8000/machines/${machineId}/products/${product.id}/quantity`,
+      await api.put(
+        `/machines/${machineId}/products/${product.id}/quantity`,
         { quantity: (product.machine_quantity || 0) + quantity },
         getAuth()
       );
@@ -417,8 +420,8 @@ const Home = () => {
     if (quantity <= 0) return;
 
     try {
-      await axios.post(
-        `http://localhost:8000/machines/${machineId}/products/${productId}/put-back`,
+      await api.post(
+        `/machines/${machineId}/products/${productId}/put-back`,
         { quantity },
         getAuth()
       );
@@ -434,8 +437,8 @@ const Home = () => {
 
   const updateProductPrice = async (productId, price) => {
     try {
-      await axios.put(
-        `http://localhost:8000/products/${productId}/price`,
+      await api.put(
+        `/products/${productId}/price`,
         { price },
         getAuth()
       );
@@ -452,8 +455,8 @@ const Home = () => {
 
     await pauseSimulationForManualAction();
     try {
-      await axios.post(
-        `http://localhost:8000/products/${productId}/restock`,
+      await api.post(
+        `/products/${productId}/restock`,
         { quantity },
         getAuth()
       );
@@ -479,8 +482,8 @@ const Home = () => {
 
     await pauseSimulationForManualAction();
     try {
-      await axios.delete(
-        'http://localhost:8000/transactions/',
+      await api.delete(
+        '/transactions/',
         getAuth()
       );
       setTransactions([]);
@@ -517,10 +520,13 @@ const Home = () => {
       <main className="app-shell">
         <header className="app-header">
           <div className="brand-lockup">
-            <img
+            <Image
               className="header-brand-logo"
               src="/assets/pixel-vending-header-logo.png"
               alt="Pixel Vending Simulator"
+              width={255}
+              height={85}
+              unoptimized
             />
           </div>
           <div className="header-account">

@@ -1,8 +1,9 @@
 "use client";
 
 import { useContext, useState } from "react";
+import Image from "next/image";
 import AuthContext from "../context/AuthContext";
-import axios from "axios";
+import api from "../../lib/api";
 
 const Login = () => {
   const { login } = useContext(AuthContext);
@@ -32,8 +33,8 @@ const Login = () => {
 
   const handleRegister = (e) => {
     e.preventDefault();
-    axios
-      .post("http://localhost:8000/auth/", {
+    api
+      .post("/auth/", {
         username: registerUsername,
         password: registerPassword,
       })
@@ -58,10 +59,14 @@ const Login = () => {
     <main className="auth-shell auth-shell-simple">
       <section className="auth-panel auth-panel-simple">
         <div className="auth-card auth-card-simple">
-          <img
+          <Image
             className="auth-logo"
             src="/assets/pixel-vending-logo.png"
             alt="Pixel Vending Simulator"
+            width={384}
+            height={256}
+            priority
+            unoptimized
           />
           <div className="auth-card-heading">
             <h1>Welcome back</h1>

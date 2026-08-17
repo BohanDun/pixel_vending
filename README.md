@@ -1,5 +1,7 @@
 # Pixel Vending Simulator
 
+[![CI](https://github.com/BohanDun/vending_machine_management/actions/workflows/ci.yml/badge.svg)](https://github.com/BohanDun/vending_machine_management/actions/workflows/ci.yml)
+
 A full-stack pixel-art vending machine simulator built with FastAPI, SQLite,
 SQLAlchemy, Alembic, Next.js, and React.
 
@@ -113,14 +115,16 @@ cleanup.
 
 ### Transactional inventory updates
 
-Purchases and inventory changes are committed through the backend so stock
-levels and transaction records remain consistent when an operation fails.
+Purchase validation and inventory changes are handled by backend services.
+Successful purchases update stock and create transaction records within the
+database transaction, while rejected purchases are recorded with an explicit
+failure status.
 
-### Deterministic simulation
+### Shared purchase pipeline
 
-Random customer behaviour is separated from purchase processing. Generated
-customers still use the same purchase service and validation rules as other
-transactions.
+Randomly generated customers use the same purchase service, inventory
+validation, and transaction recording logic as other purchase requests. This
+keeps simulated activity consistent with the application's business rules.
 
 ### Missed-task recovery
 
@@ -152,7 +156,10 @@ pixel_vending/
 │   └── reports.png
 ├── frontend/
 │   ├── public/assets/
+│   ├── src/lib/
 │   ├── src/app/
+│   ├── .env.example
+│   ├── eslint.config.mjs
 │   ├── package.json
 │   └── package-lock.json
 ├── .gitignore
@@ -197,6 +204,14 @@ AUTH_ALGORITHM=HS256
 ```
 
 The `.env` file and local SQLite database are ignored by Git.
+
+Configure the frontend API URL by copying its environment example:
+
+```bash
+cp frontend/.env.example frontend/.env.local
+```
+
+`NEXT_PUBLIC_API_URL` defaults to `http://localhost:8000` for local development.
 
 ### 3. Apply database migrations
 
@@ -268,6 +283,7 @@ Current verification:
 
 - 17 backend tests passing.
 - Alembic migration check passing.
+- Frontend lint passing.
 - Next.js production build passing.
 
 ### Backend tests
@@ -288,6 +304,15 @@ From the project root:
 source .venv/bin/activate
 cd backend
 python -m alembic check
+```
+
+### Frontend lint
+
+From the project root:
+
+```bash
+cd frontend
+npm run lint
 ```
 
 ### Frontend production build
@@ -313,7 +338,8 @@ npm run build
 
 ## Local-development notes
 
-- The frontend currently expects the API at `http://localhost:8000`.
+- The frontend API URL is configured through `NEXT_PUBLIC_API_URL` and defaults
+  to `http://localhost:8000` for local development.
 - The backend currently permits CORS requests from `http://localhost:3000`.
 - Authentication tokens are stored in browser session storage.
 - The application uses `Pacific/Auckland` for daily settlement.

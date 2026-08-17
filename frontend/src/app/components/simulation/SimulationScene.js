@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import styles from './SimulationScene.module.css';
 
 
@@ -63,10 +64,13 @@ function PixelMachine({ machine, active, index }) {
       data-machine-id={machine.id}
     >
       <div className={styles.machine} aria-label={`Pixel vending machine ${machine.name}`}>
-        <img
+        <Image
           className={styles.machineSprite}
           src="/assets/sprites/vending-machine.png"
           alt=""
+          width={192}
+          height={289}
+          unoptimized
         />
         <i className={stockedUnits > 0 ? styles.stockLight : styles.emptyLight} />
         <span className={styles.machineNumber}>

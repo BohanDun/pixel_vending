@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useEffect, useState } from "react";
-import axios from "axios";
+import api from "../../lib/api";
 import { useRouter } from "next/navigation";
 
 const AuthContext = createContext();
@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
         const token = sessionStorage.getItem('token');
 
         if (token) {
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             setUser({ access_token: token });
         }
 
@@ -28,10 +28,10 @@ export const AuthProvider = ({ children }) => {
             const formData = new URLSearchParams();
             formData.append("username", username);
             formData.append("password", password);
-            const response = await axios.post('http://localhost:8000/auth/token', formData,{
+            const response = await api.post('/auth/token', formData,{
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
            });
-           axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+           api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
            sessionStorage.setItem('token', response.data.access_token);
            setUser(response.data);
            router.push('/');
@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
          setUser(null);
          localStorage.removeItem('token');
          sessionStorage.removeItem('token');
-         delete axios.defaults.headers.common['Authorization'];
+         delete api.defaults.headers.common['Authorization'];
          router.push('/login')
     };
 

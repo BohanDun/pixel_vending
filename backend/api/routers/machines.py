@@ -17,7 +17,7 @@ router = APIRouter(
 )
 
 MAX_MACHINES_PER_USER = 4
-MACHINE_LIMIT_MESSAGE = "sorry, no availabe space"
+MACHINE_LIMIT_MESSAGE = "You can create up to four vending machines."
 
 
 def get_machine_product(db, machine_id: int, product_id: int):
