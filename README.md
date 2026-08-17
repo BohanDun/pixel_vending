@@ -1,6 +1,6 @@
 # Pixel Vending Simulator
 
-[![CI](https://github.com/BohanDun/vending_machine_management/actions/workflows/ci.yml/badge.svg)](https://github.com/BohanDun/vending_machine_management/actions/workflows/ci.yml)
+[![CI](https://github.com/BohanDun/pixel_vending/actions/workflows/ci.yml/badge.svg)](https://github.com/BohanDun/pixel_vending/actions/workflows/ci.yml)
 
 A full-stack pixel-art vending machine simulator built with FastAPI, SQLite,
 SQLAlchemy, Alembic, Next.js, and React.
