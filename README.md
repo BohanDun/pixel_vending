@@ -326,16 +326,6 @@ cd frontend
 npm run build
 ```
 
-## Current Limitations
-
-- The application currently uses SQLite and is designed for local,
-  single-instance execution.
-- The frontend and backend are configured for local development by default.
-- The customer simulation uses randomized rule-based behaviour rather than
-  real demand data.
-- The scheduler runs inside the FastAPI application process and is not designed
-  for multi-instance deployment.
-
 ## Local-development notes
 
 - The frontend API URL is configured through `NEXT_PUBLIC_API_URL` and defaults
