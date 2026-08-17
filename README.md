@@ -92,6 +92,42 @@ warehouse and individual vending machines.
 | Frontend | Next.js 15, React 19, Axios, Bootstrap |
 | Testing | Python unittest |
 
+## Architecture
+
+```mermaid
+flowchart TD
+    USER[User] --> UI[Next.js frontend]
+    UI --> API[FastAPI REST API]
+    API --> DB[(SQLite database)]
+    API --> SIM[Customer simulation]
+    SCHEDULER[APScheduler] --> DB
+```
+
+The frontend communicates with the FastAPI backend through authenticated REST
+endpoints. Business operations such as purchases, inventory transfers, and
+automatic restocking are handled by backend services and persisted through
+SQLAlchemy. APScheduler creates daily sales summaries and performs retention
+cleanup.
+
+## Engineering Decisions
+
+### Transactional inventory updates
+
+Purchases and inventory changes are committed through the backend so stock
+levels and transaction records remain consistent when an operation fails.
+
+### Deterministic simulation
+
+Random customer behaviour is separated from purchase processing. Generated
+customers still use the same purchase service and validation rules as other
+transactions.
+
+### Missed-task recovery
+
+The scheduler settles sales at midnight in the Pacific/Auckland timezone. On
+startup, the backend also processes recent unsettled dates so summaries are not
+lost when the application was offline at midnight.
+
 ## Project structure
 
 ```text
@@ -120,6 +156,7 @@ pixel_vending/
 │   ├── package.json
 │   └── package-lock.json
 ├── .gitignore
+├── dev.sh
 └── README.md
 ```
 
@@ -128,15 +165,14 @@ pixel_vending/
 ### Requirements
 
 - Python 3.12
-- Node.js and npm
+- Node.js 20 or later
+- npm
 
 ### 1. Create the Python environment
 
-Run this once from the project root:
+From the project root:
 
 ```bash
-cd pixel_vending
-
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -146,6 +182,8 @@ python -m pip install -r backend/requirements.txt
 ### 2. Configure backend environment variables
 
 Copy the provided example, then replace its development secret:
+
+From the project root:
 
 ```bash
 cp backend/.env.example backend/.env
@@ -162,17 +200,21 @@ The `.env` file and local SQLite database are ignored by Git.
 
 ### 3. Apply database migrations
 
+From the project root:
+
 ```bash
+source .venv/bin/activate
 cd backend
-source ../.venv/bin/activate
 python -m alembic upgrade head
 ```
 
 ### 4. Install frontend dependencies
 
+From the project root:
+
 ```bash
-cd ../frontend
-npm install
+cd frontend
+npm ci
 ```
 
 ## Running the application
@@ -194,9 +236,11 @@ Alternatively, use two terminals.
 
 #### Terminal 1: backend
 
+From the project root:
+
 ```bash
+source .venv/bin/activate
 cd backend
-source ../.venv/bin/activate
 python -m uvicorn api.main:app --reload --port 8000
 ```
 
@@ -206,6 +250,8 @@ Backend:
 - Swagger documentation: <http://localhost:8000/docs>
 
 #### Terminal 2: frontend
+
+From the project root:
 
 ```bash
 cd frontend
@@ -218,17 +264,29 @@ If Next.js selects port 3001, another process is still using port 3000.
 
 ## Tests and checks
 
+Current verification:
+
+- 17 backend tests passing.
+- Alembic migration check passing.
+- Next.js production build passing.
+
 ### Backend tests
 
+From the project root:
+
 ```bash
+source .venv/bin/activate
 cd backend
-source ../.venv/bin/activate
 python -m unittest discover -s tests -v
 ```
 
 ### Database migration check
 
+From the project root:
+
 ```bash
+source .venv/bin/activate
+cd backend
 python -m alembic check
 ```
 
@@ -236,10 +294,22 @@ python -m alembic check
 
 Stop the frontend development server before running the build:
 
+From the project root:
+
 ```bash
 cd frontend
 npm run build
 ```
+
+## Current Limitations
+
+- The application currently uses SQLite and is designed for local,
+  single-instance execution.
+- The frontend and backend are configured for local development by default.
+- The customer simulation uses randomized rule-based behaviour rather than
+  real demand data.
+- The scheduler runs inside the FastAPI application process and is not designed
+  for multi-instance deployment.
 
 ## Local-development notes
 
@@ -247,4 +317,6 @@ npm run build
 - The backend currently permits CORS requests from `http://localhost:3000`.
 - Authentication tokens are stored in browser session storage.
 - The application uses `Pacific/Auckland` for daily settlement.
-- This repository is intended as a learning and portfolio project.
+
+This is an individual portfolio project focused on backend business logic,
+inventory automation, and full-stack application development.
