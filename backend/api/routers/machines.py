@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy.orm import joinedload
 
 from api.models import Machine, MachineProduct, Product
@@ -420,7 +420,7 @@ def remove_product_from_machine(db: db_dependency, user: user_dependency, machin
         db.commit()
 
 
-@router.delete("/{machine_id}")
+@router.delete("/{machine_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_machine(db: db_dependency, user: user_dependency, machine_id: int):
     db_machine = (
         db.query(Machine)
@@ -439,4 +439,4 @@ def delete_machine(db: db_dependency, user: user_dependency, machine_id: int):
 
     db.delete(db_machine)
     db.commit()
-    return db_machine
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

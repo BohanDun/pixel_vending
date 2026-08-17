@@ -3,10 +3,45 @@
 A full-stack pixel-art vending machine simulator built with FastAPI, SQLite,
 SQLAlchemy, Alembic, Next.js, and React.
 
+![Pixel Vending Simulator demo](docs/demo.gif)
+
 Users manage products, warehouse inventory, prices, and vending machines while
 virtual customers automatically visit the store and make randomized purchases.
 The application records transactions, restocks machines after stockouts, and
 creates daily sales summaries in the Pacific/Auckland timezone.
+
+## Highlights
+
+- A live pixel-art store where animated customers visit vending machines and
+  display their purchase results.
+- End-to-end inventory flows across warehouse stock, machine capacity,
+  purchases, stockouts, and automatic supplier delivery.
+- Operational dashboards covering revenue, transaction outcomes, units sold,
+  and top-performing products.
+- Authenticated full-stack application with a REST API, relational data model,
+  migrations, scheduled jobs, and automated service tests.
+
+## Screenshots
+
+### Live store dashboard
+
+Monitor store activity, inventory totals, revenue, and customer purchases from
+the main control room.
+
+![Live Pixel Mart dashboard](docs/dashboard.png)
+
+### Sales reports
+
+Review 30-day sales summaries alongside filterable transaction history.
+
+![Sales reports and transaction history](docs/reports.png)
+
+### Inventory and machine management
+
+Create products and machines, update prices, and move inventory between the
+warehouse and individual vending machines.
+
+![Inventory and vending machine management](docs/inventory-management.png)
 
 ## Features
 
@@ -74,6 +109,11 @@ pixel_vending/
 │   ├── tests/
 │   ├── alembic.ini
 │   └── requirements.txt
+├── docs/
+│   ├── dashboard.png
+│   ├── demo.gif
+│   ├── inventory-management.png
+│   └── reports.png
 ├── frontend/
 │   ├── public/assets/
 │   ├── src/app/
@@ -95,7 +135,7 @@ pixel_vending/
 Run this once from the project root:
 
 ```bash
-cd /Users/peterdun/VS_Code_Playground/pixel_vending
+cd pixel_vending
 
 python3.12 -m venv .venv
 source .venv/bin/activate
@@ -105,7 +145,13 @@ python -m pip install -r backend/requirements.txt
 
 ### 2. Configure backend environment variables
 
-Create `backend/.env`:
+Copy the provided example, then replace its development secret:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+`backend/.env` contains:
 
 ```env
 AUTH_SECRET_KEY=replace_with_a_long_random_secret
@@ -117,7 +163,7 @@ The `.env` file and local SQLite database are ignored by Git.
 ### 3. Apply database migrations
 
 ```bash
-cd /Users/peterdun/VS_Code_Playground/pixel_vending/backend
+cd backend
 source ../.venv/bin/activate
 python -m alembic upgrade head
 ```
@@ -125,7 +171,7 @@ python -m alembic upgrade head
 ### 4. Install frontend dependencies
 
 ```bash
-cd /Users/peterdun/VS_Code_Playground/pixel_vending/frontend
+cd ../frontend
 npm install
 ```
 
@@ -136,7 +182,7 @@ Use two terminals.
 ### Terminal 1: backend
 
 ```bash
-cd /Users/peterdun/VS_Code_Playground/pixel_vending/backend
+cd backend
 source ../.venv/bin/activate
 python -m uvicorn api.main:app --reload --port 8000
 ```
@@ -149,7 +195,7 @@ Backend:
 ### Terminal 2: frontend
 
 ```bash
-cd /Users/peterdun/VS_Code_Playground/pixel_vending/frontend
+cd frontend
 npm run dev
 ```
 
@@ -162,7 +208,7 @@ If Next.js selects port 3001, another process is still using port 3000.
 ### Backend tests
 
 ```bash
-cd /Users/peterdun/VS_Code_Playground/pixel_vending/backend
+cd backend
 source ../.venv/bin/activate
 python -m unittest discover -s tests -v
 ```
@@ -178,7 +224,7 @@ python -m alembic check
 Stop the frontend development server before running the build:
 
 ```bash
-cd /Users/peterdun/VS_Code_Playground/pixel_vending/frontend
+cd frontend
 npm run build
 ```
 

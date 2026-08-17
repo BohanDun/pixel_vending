@@ -311,6 +311,9 @@ const Home = () => {
   const deleteMachine = async (id) => {
     try {
       await axios.delete(`http://localhost:8000/machines/${id}`, getAuth());
+      setMachines((currentMachines) =>
+        currentMachines.filter((machine) => machine.id !== id)
+      );
       await refreshProductsAndMachines();
     } catch (error) {
       handleApiError(error, 'Failed to delete machine');
