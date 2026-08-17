@@ -177,9 +177,22 @@ npm install
 
 ## Running the application
 
-Use two terminals.
+### Quick start
 
-### Terminal 1: backend
+After completing the local setup, start both servers from the project root:
+
+```bash
+./dev.sh
+```
+
+The frontend runs at <http://localhost:3000> and the backend API runs at
+<http://localhost:8000>. Press `Ctrl+C` to stop both servers.
+
+### Start each server separately
+
+Alternatively, use two terminals.
+
+#### Terminal 1: backend
 
 ```bash
 cd backend
@@ -192,7 +205,7 @@ Backend:
 - API: <http://localhost:8000>
 - Swagger documentation: <http://localhost:8000/docs>
 
-### Terminal 2: frontend
+#### Terminal 2: frontend
 
 ```bash
 cd frontend
